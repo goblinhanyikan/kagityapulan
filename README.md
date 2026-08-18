@@ -1,5 +1,6 @@
 📝 KAĞITYAPULAN / PAPERTHISDUMBA
 İNDİRME LİNKİ : https://github.com/goblinhanyikan/kagityapulan/releases/tag/v0.1
+İndirmeden kullanabilmek için web tabanlı versiyonu: https://goblinhanyikan.github.io/kagityapulan/
 
 Türkçe
 
