@@ -1,0 +1,1995 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>torn // paper — offline paper texture animator</title>
+<style>
+  :root{
+    --bg: #101312;
+    --panel: #171b1a;
+    --panel-edge: #2a3230;
+    --paper: #e8e2d0;
+    --ink: #cfd8d3;
+    --ink-dim: #7d8985;
+    --accent: #ff8a3d;
+    --accent-dim: #7a4a2a;
+    --mono: 'Courier New', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(ellipse at top left, rgba(255,138,61,0.06), transparent 55%),
+      var(--bg);
+    color:var(--ink);
+    font-family: var(--mono);
+    min-height:100vh;
+    padding: 28px 18px 60px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;}
+  header{
+    display:flex; align-items:baseline; justify-content:space-between;
+    border-bottom:1px solid var(--panel-edge);
+    padding-bottom:14px; margin-bottom:22px; flex-wrap:wrap; gap:8px;
+  }
+  h1{
+    font-size:15px; letter-spacing:.22em; text-transform:uppercase;
+    margin:0; color:var(--ink);
+    font-weight:600;
+  }
+  h1 span{color:var(--accent);}
+  .sub{font-size:11px; color:var(--ink-dim); letter-spacing:.05em;}
+  .grid{
+    display:grid;
+    grid-template-columns: 340px 1fr;
+    gap:20px;
+  }
+  @media (max-width:880px){ .grid{grid-template-columns:1fr;} }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--panel-edge);
+    padding:16px;
+  }
+  .panel + .panel{margin-top:16px;}
+  .panel h2{
+    font-size:10px; letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); margin:0 0 12px; display:flex; align-items:center; gap:8px;
+  }
+  .panel h2::before{content:"//"; color:var(--accent);}
+
+  .upload-row{display:flex; flex-direction:column; gap:8px; margin-bottom:10px;}
+  .upload-btn{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:#0d0f0e; border:1px dashed var(--panel-edge);
+    color:var(--ink); font-family:var(--mono); font-size:11px;
+    padding:10px 12px; cursor:pointer; text-align:left; transition:.15s;
+    width:100%;
+  }
+  .upload-btn:hover{ border-color:var(--accent); color:var(--accent); }
+  .upload-btn.filled{ border-style:solid; border-color:var(--accent-dim); }
+  .upload-btn .tag{
+    font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-dim);
+    white-space:nowrap;
+  }
+  input[type=file]{display:none;}
+
+  .swatch-row{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; align-items:stretch;}
+  .swatch{
+    width:52px; height:52px; padding:0; cursor:pointer;
+    background:#0d0f0e; border:1px solid var(--panel-edge);
+    position:relative; overflow:hidden; flex:0 0 auto;
+  }
+  .swatch img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .swatch:hover{ border-color:var(--accent); }
+  .swatch.active{ border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
+  .swatch.none-swatch{
+    display:flex; align-items:center; justify-content:center;
+    color:var(--ink-dim); font-size:9px; letter-spacing:.06em; text-transform:uppercase; text-align:center;
+  }
+  .swatch.none-swatch.active{ color:var(--accent); }
+  .upload-btn.small{ flex:1 1 100px; min-width:100px; }
+  .swatch-custom-row{display:flex; gap:8px; align-items:stretch;}
+
+  .slider-row{margin-bottom:14px;}
+  .slider-label{
+    display:flex; justify-content:space-between; font-size:11px;
+    color:var(--ink-dim); margin-bottom:5px; letter-spacing:.03em;
+  }
+  .slider-label b{color:var(--ink); font-weight:normal;}
+  .slider-label .val{color:var(--accent); font-variant-numeric: tabular-nums;}
+  .val-input{
+    width:56px; text-align:right; background:transparent; border:none;
+    color:var(--accent); font-family:var(--mono); font-size:11px;
+    font-variant-numeric: tabular-nums; padding:0; -moz-appearance:textfield;
+  }
+  .val-input:focus{ outline:none; border-bottom:1px solid var(--accent); }
+  .val-input::-webkit-outer-spin-button, .val-input::-webkit-inner-spin-button{
+    -webkit-appearance:none; margin:0;
+  }
+  input[type=range]{
+    -webkit-appearance:none; width:100%; height:2px; background:var(--panel-edge);
+    outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:12px; height:12px; background:var(--accent);
+    border-radius:50%; cursor:pointer; margin-top:-5px;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:12px; height:12px; background:var(--accent); border:none; border-radius:50%; cursor:pointer;
+  }
+  input[type=range]::-moz-range-track{ height:2px; background:var(--panel-edge); }
+
+  .btn-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;}
+  button.action{
+    flex:1; min-width:100px;
+    background:transparent; color:var(--ink); border:1px solid var(--panel-edge);
+    font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+    padding:10px 8px; cursor:pointer; transition:.15s;
+  }
+  button.action:hover:not(:disabled){ border-color:var(--accent); color:var(--accent); }
+  button.action:disabled{ opacity:.35; cursor:not-allowed; }
+  button.action.primary{ background:var(--accent); border-color:var(--accent); color:#141110; font-weight:bold; }
+  button.action.primary:hover:not(:disabled){ background:#ffa562; color:#141110; }
+  button.action.stop{ border-color:#b5453f; color:#e2837e; }
+  button.action.stop:hover:not(:disabled){ background:#b5453f22; }
+
+  .stage{
+    background: repeating-conic-gradient(#1c211f 0% 25%, #191d1b 0% 50%) 50% / 22px 22px;
+    border:1px solid var(--panel-edge);
+    min-height:520px;
+    display:flex; align-items:center; justify-content:center;
+    padding:20px;
+    position:relative;
+  }
+  .stage canvas{ max-width:100%; max-height:520px; image-rendering:auto; }
+  .stage .empty{ color:var(--ink-dim); font-size:11px; letter-spacing:.05em; text-align:center; max-width:280px; line-height:1.7; }
+  .stage .empty b{color:var(--accent);}
+
+  .status-strip{
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:10px; color:var(--ink-dim); letter-spacing:.05em;
+    margin-top:10px; padding-top:10px; border-top:1px solid var(--panel-edge);
+  }
+  .status-strip .dot{ width:6px; height:6px; border-radius:50%; background:var(--ink-dim); display:inline-block; margin-right:6px; }
+  .status-strip .dot.on{ background:#5fd97a; box-shadow:0 0 6px #5fd97a; }
+
+  progress{
+    width:100%; height:6px; accent-color:var(--accent); margin-top:10px; display:none;
+  }
+  #exportDownloadLink{
+    display:none; margin-top:10px; text-align:center; padding:10px 8px;
+    background:var(--accent); color:#141110; font-weight:bold;
+    font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+    text-decoration:none;
+  }
+  #exportDownloadLink:hover{ background:#ffa562; }
+  .footer-note{
+    font-size:10px; color:var(--ink-dim); margin-top:26px; text-align:center; letter-spacing:.04em; line-height:1.8;
+  }
+  .lang-toggle{
+    font-size:10px; color:var(--ink-dim); cursor:pointer; letter-spacing:.1em; text-transform:uppercase;
+    border:1px solid var(--panel-edge); padding:4px 10px; background:transparent;
+  }
+  .lang-toggle:hover{ color:var(--accent); border-color:var(--accent); }
+
+  .dropdown{ position:relative; flex:1; min-width:100px; }
+  .dropdown .dropdown-toggle{ width:100%; }
+  .dropdown-menu{
+    display:none; position:absolute; top:100%; left:0; right:0; margin-top:4px;
+    background:var(--panel); border:1px solid var(--panel-edge); z-index:20;
+    box-shadow:0 6px 18px rgba(0,0,0,.35);
+  }
+  .dropdown-menu.open{ display:block; }
+  .dropdown-item{
+    display:block; width:100%; text-align:left; background:transparent; border:none;
+    border-bottom:1px solid var(--panel-edge);
+    color:var(--ink); font-family:var(--mono); font-size:11px; letter-spacing:.05em;
+    padding:9px 10px; cursor:pointer; transition:.15s;
+  }
+  .dropdown-item:last-child{ border-bottom:none; }
+  .dropdown-item:hover{ background:var(--accent-dim); color:var(--accent); }
+  .dropdown-item .fmt-hint{ display:block; font-size:9px; color:var(--ink-dim); letter-spacing:.03em; text-transform:none; margin-top:2px; }
+  .dropdown-item:hover .fmt-hint{ color:var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>torn <span>//</span> paper <span>—</span> animator</h1>
+      <div class="sub" id="subtitle">offline · single-file · torn paper texture &amp; wiggle-loop GIF export</div>
+    </div>
+    <button class="lang-toggle" id="langBtn">TR</button>
+  </header>
+
+  <div class="grid">
+
+    <!-- LEFT: controls -->
+    <div>
+      <div class="panel">
+        <h2 id="lblSources">sources</h2>
+        <div class="upload-row">
+          <button class="upload-btn" id="btnUser"><span id="lblUpload1">upload artwork (PNG, transparent)</span><span class="tag" id="tagUser">none</span></button>
+          <input type="file" id="fileUser" accept="image/png,image/jpeg">
+
+          <div>
+            <div class="slider-label" style="margin-bottom:6px;"><b id="lblPaperChoice">paper texture</b></div>
+            <div class="swatch-row">
+              <button class="swatch" id="swPaper1" data-paper="1" title="paper 1"><img src="" alt=""></button>
+              <button class="swatch" id="swPaper2" data-paper="2" title="paper 2"><img src="" alt=""></button>
+              <button class="swatch" id="swPaper3" data-paper="3" title="paper 3"><img src="" alt=""></button>
+              <button class="swatch" id="swPaper4" data-paper="4" title="blueprint"><img src="" alt=""></button>
+            </div>
+            <div class="swatch-custom-row">
+              <button class="upload-btn small" id="btnPaper"><span id="lblUpload2">upload custom</span><span class="tag" id="tagPaper">none</span></button>
+            </div>
+          </div>
+          <input type="file" id="filePaper" accept="image/png,image/jpeg">
+
+          <div style="margin-top:12px;">
+            <div class="slider-label" style="margin-bottom:6px;"><b id="lblFgChoice">foreground overlay</b></div>
+            <div class="swatch-row">
+              <button class="swatch" id="swFgDefault" data-fg="default" title="default overlay"><img src="" alt=""></button>
+              <button class="swatch none-swatch" id="swFgNone" data-fg="none" title="none"><span id="lblNone">none</span></button>
+            </div>
+            <div class="swatch-custom-row">
+              <button class="upload-btn small" id="btnFg"><span id="lblUpload3">upload custom</span><span class="tag" id="tagFg">none</span></button>
+            </div>
+          </div>
+          <input type="file" id="fileFg" accept="image/png,image/jpeg">
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2 id="lblEdge">torn edge</h2>
+        <div class="slider-row">
+          <div class="slider-label"><b id="lblJagged">jaggedness</b><span class="val" id="valJagged">10</span></div>
+          <input type="range" id="jaggedness" min="0" max="30" value="10">
+        </div>
+        <div class="slider-row">
+          <div class="slider-label"><b id="lblExpand">paper expansion</b><span class="val" id="valExpand">15</span></div>
+          <input type="range" id="expansion" min="0" max="50" value="15">
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2 id="lblShadow">drop shadow</h2>
+        <div class="slider-row">
+          <div class="slider-label"><b id="lblShadowSize">shadow size</b><span class="val" id="valShadowSize">0</span></div>
+          <input type="range" id="shadowSize" min="0" max="40" value="0">
+        </div>
+        <div class="slider-row">
+          <div class="slider-label"><b id="lblShadowBlur">shadow blur</b><span class="val" id="valShadowBlur">0</span></div>
+          <input type="range" id="shadowBlur" min="0" max="40" value="0">
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2 id="lblAnim">animation</h2>
+        <div class="slider-row">
+          <div class="slider-label"><b id="lblWiggle">wiggle amount</b><span class="val" id="valWiggle">10</span></div>
+          <input type="range" id="wiggle" min="0" max="100" value="10">
+        </div>
+        <div class="slider-row">
+          <div class="slider-label"><b id="lblSnap">snap shift (px)</b><span class="val" id="valSnap">0.4</span></div>
+          <input type="range" id="snap" min="0" max="2" step="0.1" value="0.4">
+        </div>
+        <div class="slider-row">
+          <div class="slider-label"><b id="lblTilt">max tilt (°)</b><input type="number" class="val-input" id="tiltNum" min="0" max="90" step="0.1" value="0.5"></div>
+          <input type="range" id="tilt" min="0" max="20" step="0.1" value="0.5">
+        </div>
+        <div class="slider-row">
+          <div class="slider-label"><b id="lblFps">speed (fps)</b><span class="val" id="valFps">5</span></div>
+          <input type="range" id="fps" min="1" max="60" value="5">
+        </div>
+        <div class="slider-row">
+          <div class="slider-label"><b id="lblDuration">duration (sec)</b><input type="number" class="val-input" id="durationNum" min="0.1" step="0.1" value="3"></div>
+          <input type="range" id="duration" min="0.5" max="10" step="0.1" value="3">
+        </div>
+        <div class="btn-row">
+          <button class="action primary" id="btnStart">start</button>
+          <button class="action stop" id="btnStop" disabled>stop</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2 id="lblExport">export</h2>
+        <div class="btn-row">
+          <button class="action" id="btnPng">save png</button>
+          <div class="dropdown" id="exportDropdown">
+            <button class="action primary dropdown-toggle" id="btnExportToggle"><span id="lblExportToggle">save animation</span> ▾</button>
+            <div class="dropdown-menu" id="exportMenu">
+              <button class="dropdown-item" id="optGif" data-format="gif"><span id="lblOptGif">GIF</span></button>
+              <button class="dropdown-item" id="optPngSeq" data-format="pngseq"><span id="lblOptPngSeq">PNG sequence — transparent (saves to folder)</span></button>
+              <button class="dropdown-item" id="optWebm" data-format="webm"><span id="lblOptWebm">WebM — transparent background</span></button>
+              <button class="dropdown-item" id="optWebmGreen" data-format="webm-green"><span id="lblOptWebmGreen">WebM — greenscreen background (smooth shadow)</span></button>
+            </div>
+          </div>
+        </div>
+        <progress id="exportProgress" max="100" value="0"></progress>
+        <a id="exportDownloadLink" href="#" style="display:none;"></a>
+      </div>
+    </div>
+
+    <!-- RIGHT: preview -->
+    <div>
+      <div class="panel" style="padding:0;">
+        <div class="stage" id="stage">
+          <div class="empty" id="emptyMsg">1) upload your artwork (PNG with transparency)<br>2) upload a paper texture<br>3) (optional) a wrinkle / foreground overlay<br><br><b>adjust jaggedness &amp; expansion</b> to shape the torn border, then <b>start</b> to preview the wiggle loop.</div>
+          <canvas id="canvas" style="display:none;"></canvas>
+        </div>
+        <div class="status-strip" style="padding:10px 16px;">
+          <span><span class="dot" id="statusDot"></span><span id="statusText">idle</span></span>
+          <span id="dimsText"></span>
+        </div>
+      </div>
+      <div class="footer-note" id="footerNote">
+        runs entirely in your browser · no upload · no dependencies · GIF encoded locally
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+// =====================================================================
+// TORN // PAPER -- offline, single-file paper-texture animator
+// =====================================================================
+// How the pieces fit together, top to bottom of this file:
+//
+// 1. Built-in textures: 3 paper textures + 1 foreground overlay, embedded
+//    as base64 data URIs so the whole app is one portable .html file with
+//    no external assets to lose track of (see the note above const PAPER1).
+//
+// 2. i18n (STR/t/applyLang): a tiny EN/TR string table. t(key) looks up
+//    the current language; applyLang() pushes every string into the DOM.
+//
+// 3. State + uploads: userImg / paperImg / fgImg hold the three source
+//    images (artwork, paper texture, optional foreground overlay).
+//    wireUpload() connects each hidden <input type=file> to its visible
+//    button. Any successful upload or built-in swatch pick calls
+//    tryAutoPlay(), which starts the wiggle+tilt preview automatically
+//    once both artwork and a paper texture are available.
+//
+// 4. Core compositing (composite() and its helpers): this is the heart of
+//    the app. It builds a "torn edge" alpha mask from the artwork's shape
+//    (buildJaggedMask), fills that mask with the paper texture, then
+//    layers the artwork and optional foreground/shadow on top. Tilt is
+//    applied as a rigid rotation of the whole finished piece (rotateInPlace)
+//    rather than by re-tearing the mask at an angle -- see the comments on
+//    composite() for why that matters for performance.
+//
+// 5. Animation (startAnim/stopAnim/animLoop): drives the live on-screen
+//    preview using requestAnimationFrame, re-compositing a new frame with
+//    fresh wiggle/tilt/edge-jitter on every tick.
+//
+// 6. Export: save png just grabs the current canvas. Save gif
+//    (buildGif/lzwEncode/etc.) renders p.frames worth of composite() calls,
+//    quantizes each to a fixed palette, and hand-encodes a real GIF89a file
+//    -- no external libraries, so the whole thing keeps working offline.
+// =====================================================================
+
+// ---------------- built-in textures (embedded as base64 data URIs so this stays a true single-file app) ----------------
+// Procedurally-drawn "crumpled paper, straightened back out" textures for
+// paper 1-3, instead of embedded photos. Real crumpled paper that's been
+// flattened back out keeps two kinds of marks: broad, soft light/dark
+// blotches from the big folds (the sheet never lies perfectly flat again,
+// so it catches light unevenly), plus a network of sharp, slightly kinked
+// crease lines where the fibers actually broke. Drawing this on canvas
+// (rather than embedding another base64 photo) keeps the "single portable
+// file" promise, guarantees a clean seamless tile under the wiggle/drift
+// pattern-repeat (see drawWrapped()), and lets every paper color reuse the
+// same crumple generator with just a different palette.
+function randRange(a,b){ return a + Math.random()*(b-a); }
+function clamp255(v){ return v<0?0:v>255?255:v; }
+
+// Runs `draw(offsetX, offsetY)` once for the tile itself and once for each
+// of its 8 neighboring copies, so anything that would get clipped at one
+// edge of the tile reappears seamlessly at the opposite edge once the
+// finished texture is used as a repeating pattern.
+function drawTiled(size, draw){
+  for(let dx=-1; dx<=1; dx++){
+    for(let dy=-1; dy<=1; dy++){
+      draw(dx*size, dy*size);
+    }
+  }
+}
+
+function generateCrumpledPaperTexture(baseColor, foldColor, highlightColor){
+  const size = 260;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const cx = c.getContext('2d');
+  cx.fillStyle = baseColor;
+  cx.fillRect(0, 0, size, size);
+
+  // Broad soft highlight blotches -- the parts of the flattened sheet that
+  // still catch light like a shallow ridge left over from a fold.
+  for(let i=0;i<7;i++){
+    const bx = Math.random()*size, by = Math.random()*size;
+    const r = randRange(size*0.28, size*0.5);
+    cx.globalAlpha = 0.5;
+    drawTiled(size, (ox,oy)=>{
+      const g = cx.createRadialGradient(bx+ox, by+oy, 0, bx+ox, by+oy, r);
+      g.addColorStop(0, highlightColor);
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      cx.fillStyle = g;
+      cx.fillRect(0, 0, size, size);
+    });
+  }
+
+  // Broad soft shadow blotches -- the shallow valleys left between old folds.
+  for(let i=0;i<8;i++){
+    const bx = Math.random()*size, by = Math.random()*size;
+    const r = randRange(size*0.16, size*0.32);
+    cx.globalAlpha = 0.55;
+    drawTiled(size, (ox,oy)=>{
+      const g = cx.createRadialGradient(bx+ox, by+oy, 0, bx+ox, by+oy, r);
+      g.addColorStop(0, foldColor);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      cx.fillStyle = g;
+      cx.fillRect(0, 0, size, size);
+    });
+  }
+
+  // Sharp thin crease lines -- the actual fold creases, now flattened but
+  // still visibly darker (and, right alongside, a sliver brighter) where
+  // the fibers broke. Each one gets a slight kink partway along instead of
+  // being a single straight segment, like a real fold that wandered a bit.
+  for(let i=0;i<22;i++){
+    const x1 = Math.random()*size, y1 = Math.random()*size;
+    const ang = Math.random()*Math.PI*2;
+    const len = randRange(size*0.18, size*0.55);
+    const midLen = len*0.55;
+    const kink = randRange(-0.35, 0.35);
+    const x2 = x1 + Math.cos(ang)*midLen, y2 = y1 + Math.sin(ang)*midLen;
+    const x3 = x2 + Math.cos(ang+kink)*(len-midLen), y3 = y2 + Math.sin(ang+kink)*(len-midLen);
+
+    cx.strokeStyle = foldColor;
+    cx.lineCap = 'round';
+    cx.lineWidth = randRange(0.6, 1.6);
+    cx.globalAlpha = randRange(0.18, 0.4);
+    drawTiled(size, (ox,oy)=>{
+      cx.beginPath();
+      cx.moveTo(x1+ox, y1+oy);
+      cx.lineTo(x2+ox, y2+oy);
+      cx.lineTo(x3+ox, y3+oy);
+      cx.stroke();
+    });
+
+    cx.strokeStyle = highlightColor;
+    cx.lineWidth = 0.6;
+    cx.globalAlpha = randRange(0.12, 0.22);
+    drawTiled(size, (ox,oy)=>{
+      cx.beginPath();
+      cx.moveTo(x1+ox+0.8, y1+oy+0.8);
+      cx.lineTo(x2+ox+0.8, y2+oy+0.8);
+      cx.lineTo(x3+ox+0.8, y3+oy+0.8);
+      cx.stroke();
+    });
+  }
+  cx.globalAlpha = 1;
+
+  // Fine paper-fiber grain, on top of everything else.
+  const id = cx.getImageData(0, 0, size, size);
+  for(let i=0;i<id.data.length;i+=4){
+    const n = (Math.random()-0.5) * 14;
+    id.data[i]   = clamp255(id.data[i]+n);
+    id.data[i+1] = clamp255(id.data[i+1]+n);
+    id.data[i+2] = clamp255(id.data[i+2]+n);
+  }
+  cx.putImageData(id, 0, 0);
+
+  return c.toDataURL('image/png');
+}
+const PAPER1 = generateCrumpledPaperTexture('#efe6d4', 'rgba(120,100,70,1)',  'rgba(255,252,240,1)'); // cream/white paper
+const PAPER2 = generateCrumpledPaperTexture('#c9a876', 'rgba(94,64,28,1)',   'rgba(255,235,200,1)'); // kraft paper
+const PAPER3 = generateCrumpledPaperTexture('#d9d5cb', 'rgba(90,88,80,1)',   'rgba(250,250,245,1)'); // newsprint/grey paper
+const FG_DEFAULT = 'data:image/png;base64,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';
+
+// A procedurally-drawn blueprint-style texture (deep blueprint blue plus a
+// technical drafting grid), on the same reasoning as PAPER1-3 above: no
+// extra base64 photo to bloat the file, and drawing it as an exact NxN
+// repeating grid guarantees it's perfectly seamless once tiled.
+function generateBlueprintTexture(){
+  const size = 100;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const cx = c.getContext('2d');
+  cx.fillStyle = '#1b4b73'; // classic drafting-blueprint blue
+  cx.fillRect(0, 0, size, size);
+  // minor grid lines every 20px within the tile
+  cx.strokeStyle = 'rgba(255,255,255,0.16)';
+  cx.lineWidth = 1;
+  for(let i=20;i<size;i+=20){
+    cx.beginPath(); cx.moveTo(i+0.5, 0); cx.lineTo(i+0.5, size); cx.stroke();
+    cx.beginPath(); cx.moveTo(0, i+0.5); cx.lineTo(size, i+0.5); cx.stroke();
+  }
+  // major grid line sits exactly on the tile edge, so it repeats every
+  // 100px once tiled -- brighter, like a blueprint's bold index lines
+  cx.strokeStyle = 'rgba(255,255,255,0.32)';
+  cx.lineWidth = 1.5;
+  cx.beginPath(); cx.moveTo(0.5, 0); cx.lineTo(0.5, size); cx.stroke();
+  cx.beginPath(); cx.moveTo(0, 0.5); cx.lineTo(size, 0.5); cx.stroke();
+  return c.toDataURL('image/png');
+}
+const PAPER4 = generateBlueprintTexture();
+const BUILTIN_PAPERS = {1: PAPER1, 2: PAPER2, 3: PAPER3, 4: PAPER4};
+
+
+
+const STR = {
+  en: {
+    subtitle: "offline · single-file · torn paper texture & wiggle-loop GIF export",
+    sources: "sources", edge: "torn edge", anim: "animation", export: "export",
+    upload1: "upload artwork (PNG, transparent)", upload2: "upload custom",
+    upload3: "upload custom",
+    paperChoice: "paper texture", fgChoice: "foreground overlay", none: "none",
+    shadow: "drop shadow", shadowSize: "shadow size", shadowBlur: "shadow blur",
+    jagged: "jaggedness", expand: "paper expansion", wiggle: "wiggle amount", snap: "snap shift (px)",
+    tilt: "max tilt (°)", fps: "speed (fps)", duration: "duration (sec)",
+    start: "start", stop: "stop", savePng: "save png", saveGif: "save gif",
+    idle: "idle", rendering: "rendering", playing: "playing", ready: "ready", encoding: "encoding GIF",
+    footer: "runs entirely in your browser · no upload · no dependencies · GIF encoded locally",
+    empty: '1) upload your artwork (PNG with transparency)<br>2) upload a paper texture<br>3) (optional) a wrinkle / foreground overlay<br><br><b>adjust jaggedness &amp; expansion</b> to shape the torn border, then <b>start</b> to preview the wiggle loop.',
+    needBoth: "Upload both the artwork and a paper texture first.",
+    noneToSave: "Nothing to save yet.",
+    savedPng: "Saved PNG.",
+    savedGif: "Saved GIF.",
+    gifReady: "GIF ready — click to download",
+    exportToggle: "save animation",
+    optGif: "GIF",
+    optWebm: "WebM — transparent background",
+    optWebmGreen: "WebM — greenscreen background (smooth shadow)",
+    optPngSeq: "PNG sequence — transparent (saves to folder)",
+    encodingWebm: "encoding WebM",
+    encodingZip: "packing ZIP",
+    webmShadowWarning: "WebM export can't reliably encode a soft/blurred alpha shadow, so shadow blur has been set to 0 for this export. Shadow size (hard offset) is kept.",
+    webmGreenNote: "This WebM has a solid green screen (#00FF00) behind the animation instead of transparency, so the shadow blur is kept fully intact. Remove the green with a chroma key effect in your editor.",
+    pngSeqFolderNote: "Choose an empty folder — every frame is saved into it as a numbered transparent PNG, no ZIP step needed. In DaVinci Resolve, import that folder and pick the first file; Resolve will offer to import it as an image sequence. Set the clip's frame rate to match this app's fps setting.",
+    pngSeqZipNote: "Your browser can't save files directly to a folder, so frames are packed into a ZIP instead. Unzip it first — DaVinci Resolve (and every other editor) can only import a folder of PNGs, not the ZIP itself — then import the extracted folder as an image sequence and set the clip's frame rate to match this app's fps setting.",
+    pngSeqFolderDone: "Frames saved to the folder you chose. Import that folder into DaVinci Resolve as an image sequence.",
+    videoReady: "video ready — click to download",
+    formatUnsupported: "This export format isn't supported by your browser. Try GIF or the other video format instead."
+  },
+  tr: {
+    subtitle: "çevrimdışı · tek dosya · yırtık kağıt dokusu & titreşimli GIF dışa aktarma",
+    sources: "kaynaklar", edge: "yırtık kenar", anim: "animasyon", export: "dışa aktar",
+    upload1: "görsel yükle (PNG, saydam)", upload2: "özel dosya yükle",
+    upload3: "özel dosya yükle",
+    paperChoice: "kağıt dokusu", fgChoice: "ön plan katmanı", none: "yok",
+    shadow: "gölge düşür", shadowSize: "gölge boyutu", shadowBlur: "gölge bulanıklığı",
+    jagged: "pürüzlülük", expand: "kağıt genişlemesi", wiggle: "titreşim miktarı", snap: "ani kaydırma (px)",
+    tilt: "maks. eğim (°)", fps: "hız (fps)", duration: "süre (sn)",
+    start: "başlat", stop: "durdur", savePng: "png kaydet", saveGif: "gif kaydet",
+    idle: "boşta", rendering: "işleniyor", playing: "oynatılıyor", ready: "hazır", encoding: "GIF kodlanıyor",
+    footer: "tamamen tarayıcınızda çalışır · yükleme yok · bağımlılık yok · GIF yerel olarak kodlanır",
+    empty: '1) görselinizi yükleyin (saydam PNG)<br>2) bir kağıt dokusu yükleyin<br>3) (isteğe bağlı) kırışıklık / ön plan katmanı<br><br>yırtık kenarı şekillendirmek için <b>pürüzlülük ve genişlemeyi</b> ayarlayın, sonra döngüyü önizlemek için <b>başlat</b>a basın.',
+    needBoth: "Önce hem görseli hem de kağıt dokusunu yükleyin.",
+    noneToSave: "Henüz kaydedilecek bir şey yok.",
+    savedPng: "PNG kaydedildi.",
+    savedGif: "GIF kaydedildi.",
+    gifReady: "GIF hazır — indirmek için tıklayın",
+    exportToggle: "animasyonu kaydet",
+    optGif: "GIF",
+    optWebm: "WebM — saydam arka plan",
+    optWebmGreen: "WebM — yeşil ekran arka plan (yumuşak gölge)",
+    optPngSeq: "PNG dizisi — saydam (klasöre kaydeder)",
+    encodingWebm: "WebM kodlanıyor",
+    encodingZip: "ZIP paketleniyor",
+    webmShadowWarning: "WebM dışa aktarımı yumuşak/bulanık bir alfa gölgeyi güvenilir şekilde kodlayamaz, bu yüzden bu dışa aktarım için gölge bulanıklığı 0 olarak ayarlandı. Gölge boyutu (sert kayma) korunuyor.",
+    webmGreenNote: "Bu WebM'de saydamlık yerine animasyonun arkasında düz bir yeşil ekran (#00FF00) var, böylece gölge bulanıklığı tamamen korunur. Düzenleme programınızda kroma anahtar (chroma key) efektiyle yeşili kaldırabilirsiniz.",
+    pngSeqFolderNote: "Boş bir klasör seçin — her kare, ZIP adımına gerek kalmadan numaralandırılmış saydam bir PNG olarak bu klasöre kaydedilir. DaVinci Resolve'da bu klasörü içe aktarın ve ilk dosyayı seçin; Resolve bunu görüntü dizisi olarak içe aktarmayı önerecektir. Klibin kare hızını bu uygulamadaki fps ayarıyla eşleştirin.",
+    pngSeqZipNote: "Tarayıcınız dosyaları doğrudan bir klasöre kaydedemediği için kareler bunun yerine bir ZIP dosyasına paketlendi. Önce ZIP'i açın — DaVinci Resolve (ve diğer tüm düzenleyiciler) yalnızca PNG'lerden oluşan bir klasörü içe aktarabilir, ZIP'in kendisini değil — ardından çıkarılan klasörü görüntü dizisi olarak içe aktarın ve klibin kare hızını bu uygulamadaki fps ayarıyla eşleştirin.",
+    pngSeqFolderDone: "Kareler seçtiğiniz klasöre kaydedildi. Bu klasörü DaVinci Resolve'a görüntü dizisi olarak aktarın.",
+    videoReady: "video hazır — indirmek için tıklayın",
+    formatUnsupported: "Bu dışa aktarma biçimi tarayıcınız tarafından desteklenmiyor. Bunun yerine GIF veya diğer video biçimini deneyin."
+  }
+};
+let lang = "en";
+function t(k){ return STR[lang][k]; }
+function applyLang(){
+  const s = STR[lang];
+  document.getElementById('subtitle').textContent = s.subtitle;
+  document.getElementById('lblSources').textContent = s.sources;
+  document.getElementById('lblEdge').textContent = s.edge;
+  document.getElementById('lblAnim').textContent = s.anim;
+  document.getElementById('lblExport').textContent = s.export;
+  document.getElementById('lblUpload1').textContent = s.upload1;
+  document.getElementById('lblUpload2').textContent = s.upload2;
+  document.getElementById('lblUpload3').textContent = s.upload3;
+  document.getElementById('lblPaperChoice').textContent = s.paperChoice;
+  document.getElementById('lblFgChoice').textContent = s.fgChoice;
+  document.getElementById('lblNone').textContent = s.none;
+  document.getElementById('lblShadow').textContent = s.shadow;
+  document.getElementById('lblShadowSize').textContent = s.shadowSize;
+  document.getElementById('lblShadowBlur').textContent = s.shadowBlur;
+  document.getElementById('lblJagged').textContent = s.jagged;
+  document.getElementById('lblExpand').textContent = s.expand;
+  document.getElementById('lblWiggle').textContent = s.wiggle;
+  document.getElementById('lblSnap').textContent = s.snap;
+  document.getElementById('lblTilt').textContent = s.tilt;
+  document.getElementById('lblFps').textContent = s.fps;
+  document.getElementById('lblDuration').textContent = s.duration;
+  document.getElementById('btnStart').textContent = s.start;
+  document.getElementById('btnStop').textContent = s.stop;
+  document.getElementById('btnPng').textContent = s.savePng;
+  document.getElementById('lblExportToggle').textContent = s.exportToggle;
+  document.getElementById('lblOptGif').textContent = s.optGif;
+  document.getElementById('lblOptWebm').textContent = s.optWebm;
+  document.getElementById('lblOptWebmGreen').textContent = s.optWebmGreen;
+  document.getElementById('lblOptPngSeq').textContent = s.optPngSeq;
+  document.getElementById('footerNote').textContent = s.footer;
+  document.getElementById('emptyMsg').innerHTML = s.empty;
+  setStatus(statusKey);
+}
+document.getElementById('langBtn').addEventListener('click', ()=>{
+  lang = (lang === "en") ? "tr" : "en";
+  document.getElementById('langBtn').textContent = (lang === "en") ? "TR" : "EN";
+  applyLang();
+});
+
+let statusKey = "idle";
+// Sets the status dot + base label (idle / rendering / playing / ready).
+function setStatus(key, on){
+  statusKey = key;
+  document.getElementById('statusText').textContent = t(key);
+  document.getElementById('statusDot').classList.toggle('on', !!on);
+}
+// Appends extra detail after the current base status label, e.g. turning
+// "rendering" into "rendering (5/12)" while a GIF is being encoded, without
+// touching statusKey itself (so language switching mid-render still works).
+function setStatusDetail(detail){
+  document.getElementById('statusText').textContent = t(statusKey) + (detail ? ' ' + detail : '');
+}
+
+// ---------------- state ----------------
+let userImg = null, paperImg = null, fgImg = null;
+let animRunning = false;
+let rafHandle = null;
+let lastFrameTime = 0;
+let animStartTime = 0;
+let lastMaskRefresh = 0;
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const MAX_EXPANSION = 50;
+
+// Reads a File (from an <input type=file>) into an <img>-ready Image object.
+function loadImageFile(file, cb){
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    const img = new Image();
+    img.onload = ()=> cb(img);
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// Whenever the artwork, paper texture, or foreground overlay is about to
+// change (upload or built-in swatch pick), clear out everything tied to the
+// *previous* image first: stop any running animation loop (which otherwise
+// keeps compositing on its own schedule), drop the jagged-mask cache (it's
+// built from the old artwork's alpha), forget the last composited frame,
+// and wipe the visible canvas's drawing buffer immediately. This guarantees
+// the old image can't linger on screen -- even momentarily -- while the new
+// one is still loading; tryAutoPlay() (called right after this everywhere
+// it's used) then renders the new asset from a clean slate.
+function resetPreviewForNewAsset(){
+  stopAnim();
+  maskCache = { key: null, canvas: null };
+  combinedCanvas = null;
+  canvas.width = canvas.width; // clears the backing bitmap instantly
+}
+
+// Wires a hidden <input type=file> to its visible upload-button trigger.
+// `setter` stores the loaded Image into the right state variable (userImg /
+// paperImg / fgImg); once that's done we call tryAutoPlay() so the preview
+// jumps straight into the wiggle loop as soon as artwork + paper are both
+// present, instead of sitting on a static frame waiting for "start".
+function wireUpload(btnId, inputId, tagId, setter){
+  const btn = document.getElementById(btnId);
+  const input = document.getElementById(inputId);
+  btn.addEventListener('click', ()=> input.click());
+  input.addEventListener('change', (e)=>{
+    const f = e.target.files[0];
+    if(!f) return;
+    loadImageFile(f, (img)=>{
+      // A new image (artwork, paper, or foreground) makes everything
+      // currently on screen and cached stale -- stop any running preview
+      // loop and wipe the canvas immediately so there's no chance of the
+      // old image lingering, even for a frame, while the new one loads in.
+      resetPreviewForNewAsset();
+      setter(img);
+      document.getElementById(tagId).textContent = f.name.length > 18 ? f.name.slice(0,15)+'…' : f.name;
+      btn.classList.add('filled');
+      tryAutoPlay();
+    });
+  });
+}
+let userImgVersion = 0;
+wireUpload('btnUser','fileUser','tagUser', (img)=> { userImg = img; userImgVersion++; });
+
+wireUpload('btnPaper','filePaper','tagPaper', (img)=>{
+  paperImg = img;
+  document.querySelectorAll('#paperSwatchRow .swatch, .swatch[data-paper]').forEach(el=>el.classList.remove('active'));
+  tryAutoPlay();
+});
+wireUpload('btnFg','fileFg','tagFg', (img)=>{
+  fgImg = img;
+  document.querySelectorAll('.swatch[data-fg]').forEach(el=>el.classList.remove('active'));
+  tryAutoPlay();
+});
+
+// ---------------- built-in swatch pickers ----------------
+const builtinPaperImgs = {};   // 1,2,3 -> loaded Image (or null if the file is missing)
+let builtinFgImg = null;
+let builtinsLoaded = 0;
+const BUILTIN_ASSET_COUNT = 5;
+
+// Loads one of the embedded base64 built-in textures into an Image. Kept as
+// its own function (rather than inlined) so it can also gracefully handle a
+// load failure (onerror) if a data URI were ever malformed -- the built-in
+// swatch just stays unselectable rather than breaking the whole page.
+function loadDataUri(dataUri, cb){
+  const img = new Image();
+  img.onload = ()=> cb(img);
+  img.onerror = ()=> {
+    console.warn('Built-in texture failed to load: ' + dataUri + ' (place this file next to index.html)');
+    cb(null);
+  };
+  img.src = dataUri;
+}
+
+document.getElementById('swPaper1').querySelector('img').src = PAPER1;
+document.getElementById('swPaper2').querySelector('img').src = PAPER2;
+document.getElementById('swPaper3').querySelector('img').src = PAPER3;
+document.getElementById('swPaper4').querySelector('img').src = PAPER4;
+document.getElementById('swFgDefault').querySelector('img').src = FG_DEFAULT;
+
+[1,2,3,4].forEach((n)=>{
+  loadDataUri(BUILTIN_PAPERS[n], (img)=> { builtinPaperImgs[n] = img; builtinsLoaded++; });
+});
+loadDataUri(FG_DEFAULT, (img)=> { builtinFgImg = img; builtinsLoaded++; });
+
+function selectPaperSwatch(n){
+  if(!builtinPaperImgs[n]) return; // this built-in texture failed to load, nothing to select
+  document.querySelectorAll('.swatch[data-paper]').forEach(el=>{
+    el.classList.toggle('active', el.dataset.paper === String(n));
+  });
+  resetPreviewForNewAsset();
+  paperImg = builtinPaperImgs[n];
+  document.getElementById('tagPaper').textContent = 'none';
+  document.getElementById('btnPaper').classList.remove('filled');
+  tryAutoPlay();
+}
+function selectFgSwatch(kind){
+  document.querySelectorAll('.swatch[data-fg]').forEach(el=>{
+    el.classList.toggle('active', el.dataset.fg === kind);
+  });
+  resetPreviewForNewAsset();
+  fgImg = (kind === 'default') ? builtinFgImg : null;
+  document.getElementById('tagFg').textContent = 'none';
+  document.getElementById('btnFg').classList.remove('filled');
+  tryAutoPlay();
+}
+document.getElementById('swPaper1').addEventListener('click', ()=> selectPaperSwatch(1));
+document.getElementById('swPaper2').addEventListener('click', ()=> selectPaperSwatch(2));
+document.getElementById('swPaper3').addEventListener('click', ()=> selectPaperSwatch(3));
+document.getElementById('swPaper4').addEventListener('click', ()=> selectPaperSwatch(4));
+document.getElementById('swFgDefault').addEventListener('click', ()=> selectFgSwatch('default'));
+document.getElementById('swFgNone').addEventListener('click', ()=> selectFgSwatch('none'));
+
+// On page load, once the embedded built-in textures have finished decoding,
+// pick paper #1 and "no foreground" as the defaults so paperImg is already
+// populated by the time the person uploads their artwork -- that's what
+// lets the very first artwork upload go straight into auto-play instead of
+// needing a paper texture picked first.
+(function initDefaults(){
+  const check = setInterval(()=>{
+    if(builtinsLoaded >= BUILTIN_ASSET_COUNT){
+      clearInterval(check);
+      fgImg = null;
+      document.getElementById('swFgNone').classList.add('active');
+      if(builtinPaperImgs[4]){
+        // Default to the blueprint texture rather than a plain paper scan.
+        paperImg = builtinPaperImgs[4];
+        document.getElementById('swPaper4').classList.add('active');
+      }
+      tryAutoPlay(); // in case artwork was already uploaded before this resolved
+    }
+  }, 30);
+})();
+
+// ---------------- sliders ----------------
+// Wires a <input type=range> to its numeric readout span, and optionally an
+// extra callback (e.g. re-rendering the static preview when a shape slider
+// like jaggedness/expansion changes).
+function bindSlider(id, valId, onInput){
+  const el = document.getElementById(id);
+  const val = document.getElementById(valId);
+  el.addEventListener('input', ()=>{ val.textContent = el.value; onInput && onInput(); });
+}
+bindSlider('jaggedness','valJagged', ()=> renderStatic());
+bindSlider('expansion','valExpand', ()=> renderStatic());
+bindSlider('shadowSize','valShadowSize', ()=> renderStatic());
+bindSlider('shadowBlur','valShadowBlur', ()=> renderStatic());
+bindSlider('wiggle','valWiggle');
+bindSlider('snap','valSnap');
+// Tilt has its own bidirectional binding (instead of bindSlider) so the
+// number input can hold precise/custom values like 0.1 that the slider's
+// step can't land on exactly, while the slider still gives quick coarse control.
+(function bindTilt(){
+  const range = document.getElementById('tilt');
+  const num = document.getElementById('tiltNum');
+  range.addEventListener('input', ()=>{ num.value = range.value; });
+  num.addEventListener('input', ()=>{
+    const v = parseFloat(num.value);
+    if(!isNaN(v)){
+      const clampedForSlider = Math.min(+range.max, Math.max(+range.min, v));
+      range.value = clampedForSlider;
+    }
+  });
+  num.addEventListener('blur', ()=>{
+    if(num.value === '' || isNaN(parseFloat(num.value))) num.value = range.value;
+  });
+})();
+bindSlider('fps','valFps');
+// Duration has the same bidirectional binding as tilt: the number input can
+// hold precise/custom values (and go past the slider's max, e.g. a 20s clip)
+// while the slider still gives quick coarse control for the common range.
+(function bindDuration(){
+  const range = document.getElementById('duration');
+  const num = document.getElementById('durationNum');
+  range.addEventListener('input', ()=>{ num.value = range.value; });
+  num.addEventListener('input', ()=>{
+    const v = parseFloat(num.value);
+    if(!isNaN(v) && v > 0){
+      const clampedForSlider = Math.min(+range.max, Math.max(+range.min, v));
+      range.value = clampedForSlider;
+    }
+  });
+  num.addEventListener('blur', ()=>{
+    const v = parseFloat(num.value);
+    if(num.value === '' || isNaN(v) || v <= 0) num.value = range.value;
+  });
+})();
+
+// Reads every control's current value in one place. Called fresh each time
+// a frame is rendered (static, animated, or GIF) so all the compositing
+// code always sees live values without needing to be told when something
+// changed.
+function getParams(){
+  const fps = +document.getElementById('fps').value;
+  const duration = +document.getElementById('durationNum').value;
+  return {
+    jaggedness: +document.getElementById('jaggedness').value,
+    expansion: +document.getElementById('expansion').value,
+    shadowSize: +document.getElementById('shadowSize').value,
+    shadowBlur: +document.getElementById('shadowBlur').value,
+    wiggle: +document.getElementById('wiggle').value,
+    snap: +document.getElementById('snap').value,
+    tilt: +document.getElementById('tiltNum').value,
+    fps: fps,
+    duration: duration,
+    // Frame count is derived from the duration the user actually wants,
+    // rather than the other way around -- this is what every export loop
+    // (GIF/WebM/PNG-sequence) and the live preview's loop-phase math read.
+    frames: Math.max(1, Math.round((duration > 0 ? duration : 3) * fps))
+  };
+}
+
+// ---------------- organic motion (replaces plain per-frame random jitter + single sine tilt) ----------------
+//
+// The old motion model had two problems: position was an *independent*
+// random offset drawn fresh every single frame (so the artwork "teleports"
+// frame to frame instead of drifting -- there's no continuity, it just
+// vibrates around zero and never really goes anywhere), and tilt was a lone
+// sin() wave, which is the most mechanically obvious, metronome-like motion
+// there is -- one bump left, one bump right, forever, exactly the same
+// shape every cycle.
+//
+// This replaces both with the same idea: a short sum of a handful of sine
+// harmonics (integer multiples of the loop's base frequency, so the result
+// still closes perfectly into a seamless loop) with randomized phase and
+// weight, regenerated fresh every time playback starts or an export runs.
+// A few harmonics summed together stops looking like "a sine wave" almost
+// immediately -- the peaks land at different points in the cycle, the curve
+// speeds up and slows down unevenly -- while staying perfectly smooth and
+// loopable, which is what makes it read as natural drifting/settling motion
+// instead of either a metronome or a strobe.
+//
+// makeMotionSeed() picks that randomness once per playback/export session.
+// motionAt(seed, t, p) evaluates it at loop-phase t (0..1) and returns the
+// actual ox/oy/fgOx/fgOy/angle to feed into composite(), scaled by the
+// wiggle/tilt sliders exactly like before -- so "wiggle" still means
+// "how far it moves" and "tilt" still means "how far it rotates", they just
+// now trace an organic path instead of independent noise / a single sine.
+function makeHarmonics(count, opts){
+  opts = opts || {};
+  const minK = opts.minK || 1;
+  const arr = [];
+  for(let i=0;i<count;i++){
+    const k = minK + i; // 1,2,3... (or offset) -- integer so the loop still closes
+    arr.push({
+      k,
+      phase: Math.random() * Math.PI * 2,
+      // bias weight toward the lower harmonics so motion stays smooth/organic
+      // rather than buzzy, but keep enough of the higher ones to break up
+      // the "obviously one sine wave" look
+      weight: (Math.random() * 0.5 + 0.5) / k
+    });
+  }
+  const norm = arr.reduce((s,h)=> s + h.weight, 0) || 1;
+  arr.forEach(h=> h.weight /= norm);
+  return arr;
+}
+function makeMotionSeed(){
+  return {
+    x: makeHarmonics(4),
+    y: makeHarmonics(4),
+    angle: makeHarmonics(3),
+    fgX: makeHarmonics(4),
+    fgY: makeHarmonics(4)
+  };
+}
+function evalHarmonics(harms, t){
+  let v = 0;
+  for(const h of harms) v += h.weight * Math.sin(2*Math.PI*h.k*t + h.phase);
+  return v; // stays within roughly [-1, 1]
+}
+// t is the loop phase in [0,1); p is getParams(). Returns:
+//   paperOx/paperOy -- smooth harmonic drift of the paper texture visible
+//     through the torn mask (driven by "wiggle" only). This never moves
+//     the artwork itself, only the paper grain peeking through it.
+//   fgOx/fgOy -- same idea, its own independent harmonic set, for the
+//     foreground overlay texture (also driven by "wiggle" only).
+//   artOx/artOy -- the artwork's actual on-canvas position (driven by
+//     "snap" only): a brand new independent random offset recomputed on
+//     *every single call* (every discrete frame -- animLoop only calls this
+//     once per fps interval, and each export loop calls it once per
+//     frame), so there's no interpolation between one frame's value and
+//     the next. That abrupt frame-to-frame jump is what reads as "stop
+//     motion" rather than a glide -- the same kind of small inconsistency
+//     you get from an animator nudging the physical artwork slightly
+//     between shots instead of moving it along a rail. Wiggle plays no
+//     part in this -- only snap is allowed to move the artwork.
+//   angle -- smooth harmonic tilt (driven by "tilt"), applied to the whole
+//     rigid piece alongside artOx/artOy.
+function motionAt(seed, t, p){
+  const maxOffset = MAX_EXPANSION - 5;
+  const clampOffset = (v)=> Math.max(-maxOffset, Math.min(maxOffset, v));
+  return {
+    paperOx: clampOffset(evalHarmonics(seed.x, t) * p.wiggle),
+    paperOy: clampOffset(evalHarmonics(seed.y, t) * p.wiggle),
+    fgOx: fgImg ? clampOffset(evalHarmonics(seed.fgX, t) * p.wiggle) : 0,
+    fgOy: fgImg ? clampOffset(evalHarmonics(seed.fgY, t) * p.wiggle) : 0,
+    // Not rounded to whole pixels: snap's range is intentionally sub-pixel
+    // (0-2px) for a subtle jitter rather than a violent jump, and
+    // Math.round() would flatten most of that range straight down to 0.
+    artOx: clampOffset((Math.random()-0.5) * 2 * p.snap),
+    artOy: clampOffset((Math.random()-0.5) * 2 * p.snap),
+    angle: evalHarmonics(seed.angle, t) * p.tilt
+  };
+}
+
+// ---------------- core compositing ----------------
+
+// draws `img` centered (with optional rotation) into a canvas sized W x H, returns that canvas
+function centeredCanvas(img, W, H, angleDeg){
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const cx = c.getContext('2d');
+  cx.imageSmoothingEnabled = true;
+  cx.save();
+  cx.translate(W/2, H/2);
+  if(angleDeg) cx.rotate(angleDeg * Math.PI/180);
+  cx.drawImage(img, -img.width/2, -img.height/2);
+  cx.restore();
+  return c;
+}
+
+// "cover fit" an image into W x H (like ImageOps.fit) onto a fresh canvas
+function fitCover(img, W, H){
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const cx = c.getContext('2d');
+  const scale = Math.max(W / img.width, H / img.height);
+  const sw = W/scale, sh = H/scale;
+  const sx = (img.width - sw)/2, sy = (img.height - sh)/2;
+  cx.drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
+  return c;
+}
+
+// Cache: rebuilding the jagged mask is a heavy per-pixel operation (dilation +
+// erosion + edge jitter). It only needs to change when jaggedness, expansion,
+// or the artwork itself changes -- NOT every animation frame (the wiggle is
+// just a texture offset, it doesn't need a fresh mask each time).
+let maskCache = { key: null, canvas: null };
+function getCachedMask(art, W, H, jaggedness, expansion){
+  const key = jaggedness + '_' + expansion + '_' + W + '_' + H + '_' + userImgVersion;
+  if(maskCache.key === key){ return maskCache.canvas; }
+  const m = buildJaggedMask(art, W, H, jaggedness, expansion);
+  maskCache = { key, canvas: m };
+  return m;
+}
+
+// build jagged torn-paper alpha mask, sized W x H, based on the centered artwork's alpha
+function buildJaggedMask(artCanvas, W, H, jaggedness, expansion){
+  const srcCtx = artCanvas.getContext('2d');
+  const src = srcCtx.getImageData(0,0,W,H);
+  const n = W*H;
+  let mask = new Uint8Array(n); // binary 0/1
+  for(let i=0;i<n;i++){ mask[i] = src.data[i*4+3] > 10 ? 1 : 0; }
+
+  // dilation (expansion) via repeated 3x3 max
+  let cur = mask;
+  for(let it=0; it<expansion; it++){
+    const next = new Uint8Array(n);
+    for(let y=0;y<H;y++){
+      for(let x=0;x<W;x++){
+        const idx = y*W+x;
+        if(cur[idx]){ next[idx]=1; continue; }
+        let hit = 0;
+        for(let dy=-1;dy<=1 && !hit;dy++){
+          const yy=y+dy; if(yy<0||yy>=H) continue;
+          for(let dx=-1;dx<=1;dx++){
+            const xx=x+dx; if(xx<0||xx>=W) continue;
+            if(cur[yy*W+xx]){ hit=1; break; }
+          }
+        }
+        next[idx]=hit;
+      }
+    }
+    cur = next;
+  }
+  const dilated = cur;
+
+  if(jaggedness <= 0){
+    return maskArrayToCanvas(dilated, W, H);
+  }
+
+  // erosion by 1 (3x3 min) to find edge band
+  const eroded = new Uint8Array(n);
+  for(let y=0;y<H;y++){
+    for(let x=0;x<W;x++){
+      const idx = y*W+x;
+      if(!dilated[idx]){ eroded[idx]=0; continue; }
+      let all = 1;
+      for(let dy=-1;dy<=1 && all;dy++){
+        const yy=y+dy; if(yy<0||yy>=H){ all=0; break; }
+        for(let dx=-1;dx<=1;dx++){
+          const xx=x+dx;
+          if(xx<0||xx>=W || !dilated[yy*W+xx]){ all=0; break; }
+        }
+      }
+      eroded[idx]=all;
+    }
+  }
+
+  const jagged = new Uint8Array(dilated); // start from dilated mask
+  const maskCanvas = maskArrayToCanvas(jagged, W, H);
+  const mctx = maskCanvas.getContext('2d');
+  mctx.fillStyle = '#fff';
+
+  for(let y=0;y<H;y+=1){
+    for(let x=0;x<W;x+=1){
+      const idx=y*W+x;
+      if(dilated[idx] && !eroded[idx]){
+        // edge pixel: draw a small jittered triangle
+        const dx = (Math.random()-0.5) * jaggedness * 2;
+        const dy = (Math.random()-0.5) * jaggedness * 2;
+        const nx = Math.min(W-1, Math.max(0, x+dx));
+        const ny = Math.min(H-1, Math.max(0, y+dy));
+        const size = 2 + Math.random() * Math.max(2, jaggedness/2);
+        mctx.beginPath();
+        mctx.moveTo(nx, ny);
+        mctx.lineTo(nx + (Math.random()-0.5)*size*2, ny + (Math.random()-0.5)*size*2);
+        mctx.lineTo(nx + (Math.random()-0.5)*size*2, ny + (Math.random()-0.5)*size*2);
+        mctx.closePath();
+        mctx.fill();
+      }
+    }
+  }
+
+  // soften + threshold
+  const blurred = document.createElement('canvas');
+  blurred.width = W; blurred.height = H;
+  const bctx = blurred.getContext('2d');
+  bctx.filter = 'blur(1.1px)';
+  bctx.drawImage(maskCanvas, 0, 0);
+  bctx.filter = 'none';
+
+  const bd = bctx.getImageData(0,0,W,H);
+  for(let i=0;i<n;i++){
+    const a = bd.data[i*4+3];
+    const v = a > 96 ? 255 : 0;
+    bd.data[i*4]=255; bd.data[i*4+1]=255; bd.data[i*4+2]=255; bd.data[i*4+3]=v;
+  }
+  bctx.putImageData(bd,0,0);
+  return blurred;
+}
+
+// Converts a plain 0/1 Uint8Array (one entry per pixel) into a white/transparent
+// canvas -- i.e. turns a binary mask array into something drawImage() can use.
+function maskArrayToCanvas(arr, W, H){
+  const c = document.createElement('canvas');
+  c.width=W; c.height=H;
+  const cx = c.getContext('2d');
+  const id = cx.createImageData(W,H);
+  for(let i=0;i<arr.length;i++){
+    id.data[i*4]=255; id.data[i*4+1]=255; id.data[i*4+2]=255;
+    id.data[i*4+3]= arr[i] ? 255 : 0;
+  }
+  cx.putImageData(id,0,0);
+  return c;
+}
+
+// Rotate an already-composited canvas rigidly around its own center, into a
+// new canvas of the SAME dimensions (content near the corners can clip,
+// same as the padding budget already reserved via MAX_EXPANSION/shadow pad).
+// Rotating the finished torn+paper+shadow image as one rigid piece is both
+// correct (a torn scrap of paper tilts as a whole, edges and all) and cheap
+// -- unlike rebuilding the per-pixel jagged mask from a pre-rotated source,
+// which is what made tilt too expensive to run every animation frame.
+// Rotate (and now also translate) an already-composited canvas rigidly as
+// one piece, into a new canvas of the SAME dimensions (content near the
+// edges can clip, same as the padding budget already reserved via
+// MAX_EXPANSION/shadow pad). Doing this to the finished torn+paper+shadow
+// image as one rigid unit is both correct (a torn scrap of paper tilts AND
+// shifts as a whole, edges and shadow along with it) and cheap -- unlike
+// rebuilding the per-pixel jagged mask from a pre-shifted/pre-rotated
+// source, which is what made tilt (and now translation) too expensive to
+// run every animation frame if done any other way.
+function rotateInPlace(src, angleDeg, ox, oy){
+  ox = ox || 0; oy = oy || 0;
+  if(!angleDeg && !ox && !oy) return src;
+  const w = src.width, h = src.height;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const cx = c.getContext('2d');
+  cx.translate(w/2 + ox, h/2 + oy);
+  if(angleDeg) cx.rotate(angleDeg * Math.PI/180);
+  cx.drawImage(src, -w/2, -h/2);
+  return c;
+}
+
+// draw `fittedCanvas` into `targetCtx` (WxH) using pattern-repeat with an offset, to emulate PIL's toroidal ImageChops.offset
+function drawWrapped(targetCtx, fittedCanvas, W, H, ox, oy){
+  const pat = targetCtx.createPattern(fittedCanvas, 'repeat');
+  targetCtx.save();
+  targetCtx.translate(ox, oy);
+  targetCtx.fillStyle = pat;
+  // fill enough area to cover the canvas regardless of translation direction
+  targetCtx.fillRect(-W, -H, W*3, H*3);
+  targetCtx.restore();
+}
+
+// Full composite. angleDeg rigidly rotates the finished torn+paper(+shadow)
+// piece as a whole (see rotateInPlace) -- used for the tilt wobble in both
+// the live preview and GIF export.
+// shadowSize/shadowBlur add a drop shadow behind the whole torn-paper composite.
+// paperOx/paperOy shift only the paper texture visible through the torn
+// mask (a "wiggle" cosmetic detail -- the grain sliding slightly under a
+// fixed piece of paper). artOx/artOy instead physically translate the
+// whole finished piece -- artwork, mask, paper cutout, and shadow together
+// -- exactly the way angleDeg physically rotates it. These are
+// deliberately two different things now: wiggle should only ever move the
+// paper's own texture, never the artwork itself; only snap (artOx/artOy)
+// is allowed to move the artwork.
+function composite(jaggedness, expansion, paperOx, paperOy, fgOx, fgOy, angleDeg, shadowSize, shadowBlur, artOx, artOy){
+  if(!userImg) return null;
+  shadowSize = shadowSize || 0;
+  shadowBlur = shadowBlur || 0;
+  artOx = artOx || 0;
+  artOy = artOy || 0;
+  const pad = Math.ceil(shadowSize + shadowBlur);
+  const W = userImg.width + MAX_EXPANSION*2 + pad*2;
+  const H = userImg.height + MAX_EXPANSION*2 + pad*2;
+
+  const art = centeredCanvas(userImg, W, H, 0);
+
+  const out = document.createElement('canvas');
+  out.width = W; out.height = H;
+  const octx = out.getContext('2d');
+
+  if(paperImg){
+    // Art is always built centered and unrotated at this stage -- tilt AND
+    // the snap position offset (artOx, artOy) are applied as a single rigid
+    // transform of the finished composite (see rotateInPlace below), so the
+    // jagged mask can always come from cache regardless of angleDeg/artOx/
+    // artOy. This is what makes it cheap enough to animate every frame: the
+    // actual artwork+mask+paper-cutout+shadow all move and tilt together as
+    // one physical scrap of paper, without ever needing to rebuild the
+    // (relatively expensive) per-pixel jagged mask mid-loop. The paper
+    // texture's own drift (paperOx/paperOy) is separate and only affects
+    // what's drawn *inside* that mask, further down.
+    const mask = getCachedMask(art, W, H, jaggedness, expansion);
+    const paperFitted = fitCover(paperImg, W, H);
+
+    const paperLayer = document.createElement('canvas');
+    paperLayer.width = W; paperLayer.height = H;
+    const plctx = paperLayer.getContext('2d');
+    plctx.drawImage(mask, 0, 0);
+    plctx.globalCompositeOperation = 'source-in';
+    drawWrapped(plctx, paperFitted, W, H, paperOx, paperOy);
+    plctx.globalCompositeOperation = 'source-over';
+
+    octx.drawImage(paperLayer, 0, 0);
+  }
+
+  octx.drawImage(art, 0, 0);
+
+  if(fgImg){
+    const fgFitted = fitCover(fgImg, W, H);
+    const fgLayer = document.createElement('canvas');
+    fgLayer.width = W; fgLayer.height = H;
+    const flctx = fgLayer.getContext('2d');
+    drawWrapped(flctx, fgFitted, W, H, fgOx, fgOy);
+    octx.drawImage(fgLayer, 0, 0);
+  }
+
+  if(shadowSize > 0 || shadowBlur > 0){
+    const shadowed = document.createElement('canvas');
+    shadowed.width = W; shadowed.height = H;
+    const sctx = shadowed.getContext('2d');
+    sctx.shadowColor = 'rgba(0,0,0,0.55)';
+    sctx.shadowBlur = shadowBlur;
+    sctx.shadowOffsetX = shadowSize;
+    sctx.shadowOffsetY = shadowSize;
+    sctx.drawImage(out, 0, 0);
+    return rotateInPlace(shadowed, angleDeg || 0, artOx, artOy);
+  }
+
+  return rotateInPlace(out, angleDeg || 0, artOx, artOy);
+}
+
+// Crops away the fully-transparent margin around the composited image (the
+// generous MAX_EXPANSION/shadow padding used during compositing) down to
+// just the visible content, so the static PNG/preview isn't mostly empty
+// space. Only used for the static preview/PNG export -- animated frames
+// keep the full padded canvas since their content shifts frame to frame.
+function trimToContent(srcCanvas){
+  const w = srcCanvas.width, h = srcCanvas.height;
+  const cx = srcCanvas.getContext('2d');
+  const data = cx.getImageData(0,0,w,h).data;
+  let minX=w, minY=h, maxX=-1, maxY=-1;
+  for(let y=0;y<h;y++){
+    for(let x=0;x<w;x++){
+      if(data[(y*w+x)*4+3] > 4){
+        if(x<minX)minX=x; if(x>maxX)maxX=x;
+        if(y<minY)minY=y; if(y>maxY)maxY=y;
+      }
+    }
+  }
+  if(maxX < 0) return srcCanvas;
+  const cw = maxX-minX+1, ch = maxY-minY+1;
+  const out = document.createElement('canvas');
+  out.width = cw; out.height = ch;
+  out.getContext('2d').drawImage(srcCanvas, minX, minY, cw, ch, 0, 0, cw, ch);
+  return out;
+}
+
+let combinedCanvas = null;
+
+// Draws a finished composite canvas onto the visible on-screen <canvas>,
+// resizing it to match and updating the "W × H px" readout underneath.
+function showCanvas(c){
+  document.getElementById('emptyMsg').style.display = 'none';
+  canvas.style.display = 'block';
+  canvas.width = c.width; canvas.height = c.height;
+  canvas.getContext('2d').clearRect(0,0,c.width,c.height);
+  canvas.getContext('2d').drawImage(c,0,0);
+  document.getElementById('dimsText').textContent = c.width + ' × ' + c.height + ' px';
+}
+
+// Renders a single untilted, unwiggled frame (ox/oy/angle all 0) and shows
+// it -- used whenever we're not animating: right after an upload/swatch
+// pick if we don't yet have both an artwork and a paper texture (see
+// tryAutoPlay), and whenever a shape slider (jaggedness/expansion/shadow)
+// changes so the person gets instant feedback without needing to press play.
+function renderStatic(){
+  if(!userImg){ return; }
+  const p = getParams();
+  const full = composite(p.jaggedness, p.expansion, 0, 0, 0, 0, 0, p.shadowSize, p.shadowBlur);
+  combinedCanvas = trimToContent(full);
+  showCanvas(combinedCanvas);
+  setStatus('ready');
+}
+
+// ---------------- animation ----------------
+
+// Starts the live wiggle+tilt preview loop. Pulled out into its own function
+// (instead of living only inside the "start" button's click handler) so both
+// the manual button AND tryAutoPlay() below can trigger it the same way.
+let currentMotionSeed = null;
+function startAnim(){
+  animRunning = true;
+  document.getElementById('btnStart').disabled = true;
+  document.getElementById('btnStop').disabled = false;
+  setStatus('playing', true);
+  // Reset all the "since playback began" timers so tilt phase and edge
+  // re-tear timing start fresh each time playback (re)starts.
+  lastFrameTime = 0;
+  animStartTime = 0;
+  lastMaskRefresh = 0;
+  // Fresh organic-motion randomness every time playback (re)starts, so
+  // consecutive plays don't trace the identical path.
+  currentMotionSeed = makeMotionSeed();
+  rafHandle = requestAnimationFrame(animLoop);
+}
+
+document.getElementById('btnStart').addEventListener('click', ()=>{
+  if(!userImg || !paperImg){ alert(t('needBoth')); return; }
+  startAnim();
+});
+document.getElementById('btnStop').addEventListener('click', stopAnim);
+function stopAnim(){
+  animRunning = false;
+  document.getElementById('btnStart').disabled = false;
+  document.getElementById('btnStop').disabled = true;
+  if(rafHandle) cancelAnimationFrame(rafHandle);
+  setStatus('idle');
+}
+
+// Called after every upload / swatch pick (artwork, paper, or foreground).
+// As soon as both an artwork and a paper texture are available, jump
+// straight into the wiggle+tilt preview instead of leaving the person
+// staring at a static frame and having to remember to press "start".
+// If playback is already running, leave it running as-is -- the loop reads
+// userImg/paperImg/getParams() live every frame, so a texture swap or slider
+// change mid-play is picked up automatically without a restart.
+// If we don't yet have both images, just fall back to the old static render.
+function tryAutoPlay(){
+  if(userImg && paperImg){
+    if(!animRunning) startAnim();
+  } else {
+    renderStatic();
+  }
+}
+
+function animLoop(ts){
+  if(!animRunning) return;
+  if(!animStartTime) animStartTime = ts;
+  if(!lastMaskRefresh) lastMaskRefresh = ts;
+  const p = getParams();
+  const interval = 1000 / Math.max(1,p.fps);
+  if(ts - lastFrameTime >= interval){
+    lastFrameTime = ts;
+    const cycleSeconds = Math.max(0.05, p.frames / Math.max(1,p.fps));
+    const elapsed = (ts - animStartTime) / 1000;
+    const t = (elapsed % cycleSeconds) / cycleSeconds;
+    const m = motionAt(currentMotionSeed, t, p);
+
+    // Every ~400ms, force the torn edge to re-tear with fresh jitter so the
+    // edge itself has some life during playback instead of sitting frozen
+    // for the whole loop (it only needs to change occasionally, not every
+    // frame -- rebuilding it is a relatively heavy per-pixel operation).
+    if(ts - lastMaskRefresh > 400){
+      maskCache.key = null;
+      lastMaskRefresh = ts;
+    }
+
+    const frame = composite(p.jaggedness, p.expansion, m.paperOx, m.paperOy, m.fgOx, m.fgOy, m.angle, p.shadowSize, p.shadowBlur, m.artOx, m.artOy);
+    combinedCanvas = frame;
+    showCanvas(frame);
+  }
+  rafHandle = requestAnimationFrame(animLoop);
+}
+
+// ---------------- save png ----------------
+document.getElementById('btnPng').addEventListener('click', ()=>{
+  if(!combinedCanvas){ alert(t('noneToSave')); return; }
+  combinedCanvas.toBlob((blob)=>{
+    downloadBlob(blob, 'torn_paper.png');
+  }, 'image/png');
+});
+
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=> URL.revokeObjectURL(url), 4000);
+}
+
+// ---------------- GIF export (self-contained GIF89a encoder) ----------------
+
+// Fixed 6x6x6 web-safe-style palette (216 colors) + 1 reserved transparent index.
+const LEVELS = [0,51,102,153,204,255];
+function buildPalette(){
+  const pal = [];
+  for(let r=0;r<6;r++) for(let g=0;g<6;g++) for(let b=0;b<6;b++){
+    pal.push([LEVELS[r],LEVELS[g],LEVELS[b]]);
+  }
+  while(pal.length < 255) pal.push([0,0,0]);
+  pal.push([0,0,0]); // index 255 reserved: transparent
+  return pal;
+}
+// Snaps an RGB color to the nearest of the 216 palette entries above by
+// rounding each channel to the nearest of the 6 LEVELS, then looking up
+// that combination's index in the flat r*36+g*6+b layout buildPalette() used.
+function nearestPaletteIndex(r,g,b){
+  const ri = Math.min(5, Math.round(r/51));
+  const gi = Math.min(5, Math.round(g/51));
+  const bi = Math.min(5, Math.round(b/51));
+  return ri*36 + gi*6 + bi;
+}
+
+// Converts one rendered frame (a canvas with real RGBA pixels) into a flat
+// array of palette indices, one byte per pixel -- the format GIF frames are
+// actually stored in. Fully transparent pixels (alpha < 128) get the
+// reserved transparent index (255) instead of a color match.
+function frameToIndices(frameCanvas, W, H){
+  const cx = frameCanvas.getContext('2d');
+  const data = cx.getImageData(0,0,W,H).data;
+  const idxArr = new Uint8Array(W*H);
+  for(let i=0;i<W*H;i++){
+    const a = data[i*4+3];
+    if(a < 128){
+      idxArr[i] = 255; // transparent index
+    } else {
+      idxArr[i] = nearestPaletteIndex(data[i*4], data[i*4+1], data[i*4+2]);
+    }
+  }
+  return idxArr;
+}
+
+// --- minimal GIF LZW encoder (GIF89a spec, variable-width codes) ---
+function lzwEncode(indices, minCodeSize){
+  const clearCode = 1 << minCodeSize;
+  const endCode = clearCode + 1;
+  let nextCode = endCode + 1;      // encoder's own dictionary counter
+  let shadowNext = endCode + 1;    // mirrors what a standard GIF decoder's own
+                                    // table-size counter will be as it reads
+  let codeSize = minCodeSize + 1;
+  let dict = new Map();
+  let firstAfterClear = true;      // decoders don't grow their table on the
+                                    // very first code read after a Clear
+  function resetDict(){
+    dict = new Map();
+    for(let i=0;i<clearCode;i++) dict.set(String(i), i);
+    nextCode = endCode + 1;
+    shadowNext = endCode + 1;
+    codeSize = minCodeSize + 1;
+    firstAfterClear = true;
+  }
+  resetDict();
+
+  const bytesOut = [];
+  let bitBuf = 0, bitCount = 0;
+  function emit(code){
+    bitBuf |= (code << bitCount);
+    bitCount += codeSize;
+    while(bitCount >= 8){
+      bytesOut.push(bitBuf & 0xFF);
+      bitBuf >>= 8;
+      bitCount -= 8;
+    }
+  }
+
+  emit(clearCode);
+  let w = String(indices[0]);
+  for(let i=1;i<indices.length;i++){
+    const k = indices[i];
+    const wk = w + ',' + k;
+    if(dict.has(wk)){
+      w = wk;
+    } else {
+      emit(dict.get(w));
+
+      // Bump code width based on the decoder-mirroring counter, not the
+      // encoder's own dictionary counter (which runs one entry ahead) -
+      // otherwise the encoder switches to wider codes one code too early
+      // and every real GIF decoder desyncs from that point on.
+      if(!firstAfterClear && shadowNext < 4096){
+        shadowNext++;
+        if(shadowNext === (1<<codeSize) && codeSize < 12) codeSize++;
+      }
+      firstAfterClear = false;
+
+      if(nextCode < 4096){
+        dict.set(wk, nextCode);
+        nextCode++;
+      } else {
+        emit(clearCode);
+        resetDict();
+      }
+      w = String(k);
+    }
+  }
+  emit(dict.get(w));
+  emit(endCode);
+  if(bitCount > 0){ bytesOut.push(bitBuf & 0xFF); }
+
+  return bytesOut;
+}
+
+// GIF stores compressed data in "sub-blocks": a length byte followed by that
+// many data bytes, repeated, terminated by a zero-length block. This chops
+// the raw LZW output into that format.
+function packSubBlocks(bytes){
+  const out = [];
+  let i = 0;
+  while(i < bytes.length){
+    const chunk = bytes.slice(i, i+255);
+    out.push(chunk.length);
+    for(const b of chunk) out.push(b);
+    i += 255;
+  }
+  out.push(0);
+  return out;
+}
+
+// Assembles the complete GIF89a file byte-by-byte: header, global color
+// table, the NETSCAPE2.0 extension that makes it loop forever, then one
+// graphic-control-extension + image block per frame (each LZW-encoded via
+// lzwEncode above), and a trailer byte. This is the whole "no external GIF
+// library" encoder -- every byte here matters to the format, so if you need
+// to touch this, cross-check against the GIF89a spec rather than guessing.
+function buildGif(frames, W, H, delayCs, palette){
+  const bytes = [];
+  function pushStr(s){ for(let i=0;i<s.length;i++) bytes.push(s.charCodeAt(i)); }
+  function push16(n){ bytes.push(n & 0xFF, (n>>8) & 0xFF); }
+
+  pushStr('GIF89a');
+  push16(W); push16(H);
+  bytes.push(0xF7); // global color table, 256 entries, color res 8bit
+  bytes.push(255);  // background color index (transparent slot)
+  bytes.push(0);    // pixel aspect
+
+  for(const c of palette){ bytes.push(c[0], c[1], c[2]); }
+
+  // NETSCAPE2.0 application extension for looping
+  bytes.push(0x21, 0xFF, 0x0B);
+  pushStr('NETSCAPE2.0');
+  bytes.push(0x03, 0x01, 0x00, 0x00, 0x00);
+
+  const minCodeSize = 8;
+
+  for(const idxArr of frames){
+    // graphic control extension
+    bytes.push(0x21, 0xF9, 0x04);
+    bytes.push(0x09); // disposal=2 (restore to background) + transparent flag
+    push16(delayCs);
+    bytes.push(255); // transparent color index
+    bytes.push(0x00);
+
+    // image descriptor
+    bytes.push(0x2C);
+    push16(0); push16(0); push16(W); push16(H);
+    bytes.push(0x00);
+
+    bytes.push(minCodeSize);
+    const lzwBytes = lzwEncode(idxArr, minCodeSize);
+    const packed = packSubBlocks(lzwBytes);
+    for(const b of packed) bytes.push(b);
+  }
+
+  bytes.push(0x3B);
+  return new Uint8Array(bytes);
+}
+
+async function exportGif(){
+  if(!userImg || !paperImg){ alert(t('needBoth')); return; }
+  const p = getParams();
+  const progressEl = document.getElementById('exportProgress');
+  progressEl.style.display = 'block';
+  progressEl.max = p.frames; progressEl.value = 0;
+  document.getElementById('exportDownloadLink').style.display = 'none';
+  setStatus('rendering', true);
+  setStatusDetail('(0/' + p.frames + ')');
+
+  const pad = Math.ceil((p.shadowSize||0) + (p.shadowBlur||0));
+  const W = userImg.width + MAX_EXPANSION*2 + pad*2;
+  const H = userImg.height + MAX_EXPANSION*2 + pad*2;
+  const palette = buildPalette();
+  const frameIndices = [];
+  const motionSeed = makeMotionSeed();
+
+  // Phase 1: render each frame (composite the torn paper + wiggle + tilt)
+  // and quantize it down to the fixed GIF palette. This is the slow part for
+  // big images or heavy jaggedness/expansion, so we report live progress and
+  // yield back to the browser after every frame so the progress bar and
+  // status text actually get a chance to repaint instead of appearing frozen.
+  for(let i=0;i<p.frames;i++){
+    const m = motionAt(motionSeed, i/p.frames, p);
+    // Re-tear the edge every few frames so it isn't frozen for the whole
+    // loop, matching the live preview's occasional mask refresh.
+    if(i % 4 === 0) maskCache.key = null;
+    const frame = composite(p.jaggedness, p.expansion, m.paperOx, m.paperOy, m.fgOx, m.fgOy, m.angle, p.shadowSize, p.shadowBlur, m.artOx, m.artOy);
+    frameIndices.push(frameToIndices(frame, W, H));
+    progressEl.value = i+1;
+    setStatusDetail('(' + (i+1) + '/' + p.frames + ')');
+    // yield to keep UI responsive
+    await new Promise(r=>setTimeout(r, 0));
+  }
+
+  // Phase 2: LZW-encode every frame into the final GIF89a byte stream. This
+  // is a different kind of work (bit-packing, not pixel math) and can still
+  // take a noticeable moment on many/large frames, so it gets its own status
+  // label ("encoding GIF") rather than silently looking like nothing is
+  // happening right after the progress bar finishes filling.
+  setStatus('rendering', true);
+  setStatusDetail('— ' + t('encoding'));
+  await new Promise(r=>setTimeout(r, 0)); // let the status text above actually paint
+  const delayCs = Math.max(2, Math.round(100 / Math.max(1,p.fps)));
+  const gifBytes = buildGif(frameIndices, W, H, delayCs, palette);
+  const blob = new Blob([gifBytes], {type:'image/gif'});
+
+  // Long renders (many frames / big images / heavy jaggedness+expansion) can
+  // take long enough that the browser's window for treating this as a
+  // continuation of the original button click closes -- some browsers then
+  // silently drop a programmatic download click with no error at all. So
+  // rather than relying only on the auto-click, always surface a real,
+  // visible link the person can click themselves; that click is always a
+  // guaranteed, fresh user gesture, so the file is never unreachable.
+  const link = document.getElementById('exportDownloadLink');
+  if(link.dataset.url) URL.revokeObjectURL(link.dataset.url);
+  const url = URL.createObjectURL(blob);
+  link.href = url;
+  link.download = 'torn_paper.gif';
+  link.dataset.url = url;
+  link.textContent = t('gifReady');
+  link.style.display = 'block';
+
+  downloadBlob(blob, 'torn_paper.gif');
+
+  progressEl.style.display = 'none';
+  setStatus('ready');
+}
+
+// ---------------- WebM export (MediaRecorder + canvas.captureStream) ----------------
+//
+// Two flavors, both containerized as WebM (VP9/VP8) via MediaRecorder:
+//
+//  - "webm": true alpha-channel transparency (VP9's alpha plane). That alpha
+//    plane isn't well suited to soft/blurred edges -- semi-transparent
+//    shadow pixels tend to band or get crushed differently across players
+//    and editors -- so shadow blur is forced to 0 (shadowSize/offset is
+//    kept as a hard edge) and the user is warned up front.
+//
+//  - "webm-green": opaque, with a flat #00FF00 green-screen painted behind
+//    the animation every frame instead of using alpha. Because there's no
+//    alpha plane involved, the full shadow blur survives untouched -- the
+//    user just needs to pull a chroma key in their editor afterward to get
+//    back to a clean transparent/composited shot.
+function pickMimeType(candidates){
+  if(typeof MediaRecorder === 'undefined') return null;
+  for(const m of candidates){
+    if(MediaRecorder.isTypeSupported(m)) return m;
+  }
+  return null;
+}
+
+async function exportVideo(format){
+  if(!userImg || !paperImg){ alert(t('needBoth')); return; }
+  if(typeof MediaRecorder === 'undefined' || !HTMLCanvasElement.prototype.captureStream){
+    alert(t('formatUnsupported'));
+    return;
+  }
+
+  const isGreen = format === 'webm-green';
+  const p = getParams();
+  let shadowSize = p.shadowSize;
+  let shadowBlur = p.shadowBlur;
+
+  if(isGreen){
+    // Opaque background, so the shadow's blur survives untouched -- no
+    // forcing needed here, only a heads-up that a chroma key pass is required.
+    alert(t('webmGreenNote'));
+  } else {
+    if(shadowBlur > 0){
+      alert(t('webmShadowWarning'));
+    }
+    shadowBlur = 0; // hard-edged shadow only -- see note above
+  }
+
+  const mimeType = pickMimeType(['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']);
+
+  if(!mimeType){
+    alert(t('formatUnsupported'));
+    return;
+  }
+
+  const pad = Math.ceil(shadowSize + shadowBlur);
+  const W = userImg.width + MAX_EXPANSION*2 + pad*2;
+  const H = userImg.height + MAX_EXPANSION*2 + pad*2;
+
+  const recCanvas = document.createElement('canvas');
+  recCanvas.width = W; recCanvas.height = H;
+  const rctx = recCanvas.getContext('2d', { alpha: !isGreen });
+
+  const progressEl = document.getElementById('exportProgress');
+  progressEl.style.display = 'block';
+  progressEl.max = p.frames; progressEl.value = 0;
+  document.getElementById('exportDownloadLink').style.display = 'none';
+  setStatus('rendering', true);
+  setStatusDetail('(0/' + p.frames + ')');
+
+  const stream = recCanvas.captureStream(p.fps);
+  let recorder;
+  try{
+    recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 10_000_000 });
+  } catch(err){
+    alert(t('formatUnsupported'));
+    progressEl.style.display = 'none';
+    setStatus('ready');
+    return;
+  }
+  const chunks = [];
+  recorder.ondataavailable = (e)=>{ if(e.data && e.data.size) chunks.push(e.data); };
+  const stopped = new Promise((resolve)=> recorder.onstop = resolve);
+
+  recorder.start();
+
+  const frameDelay = 1000 / Math.max(1, p.fps);
+  const motionSeed = makeMotionSeed();
+  for(let i=0;i<p.frames;i++){
+    const m = motionAt(motionSeed, i/p.frames, p);
+    if(i % 4 === 0) maskCache.key = null;
+    const frame = composite(p.jaggedness, p.expansion, m.paperOx, m.paperOy, m.fgOx, m.fgOy, m.angle, shadowSize, shadowBlur, m.artOx, m.artOy);
+
+    rctx.clearRect(0, 0, W, H);
+    if(isGreen){
+      rctx.fillStyle = '#00FF00';
+      rctx.fillRect(0, 0, W, H);
+    }
+    rctx.drawImage(frame, 0, 0);
+
+    progressEl.value = i+1;
+    setStatusDetail('(' + (i+1) + '/' + p.frames + ')');
+    await new Promise(r=> setTimeout(r, frameDelay));
+  }
+
+  setStatusDetail('— ' + t('encodingWebm'));
+  // hold the last frame on-screen for one more tick so the recorder captures it
+  await new Promise(r=> setTimeout(r, frameDelay));
+  recorder.stop();
+  await stopped;
+
+  const blob = new Blob(chunks, { type: mimeType });
+  const filename = isGreen ? 'torn_paper_greenscreen.webm' : 'torn_paper.webm';
+
+  const link = document.getElementById('exportDownloadLink');
+  if(link.dataset.url) URL.revokeObjectURL(link.dataset.url);
+  const url = URL.createObjectURL(blob);
+  link.href = url;
+  link.download = filename;
+  link.dataset.url = url;
+  link.textContent = t('videoReady');
+  link.style.display = 'block';
+
+  downloadBlob(blob, filename);
+
+  progressEl.style.display = 'none';
+  setStatus('ready');
+}
+
+// ---------------- PNG sequence export (hand-rolled STORE-only ZIP) ----------------
+//
+// MediaRecorder-produced WebM files are streaming-style containers -- they
+// often have no accurate duration in their header and use timing/
+// keyframe structures many NLEs (DaVinci Resolve in particular) don't
+// import reliably, even though they play fine in a browser or media
+// player. A ZIP of individually-numbered transparent PNGs sidesteps all of
+// that: every professional editor can import a PNG sequence as a clip, the
+// alpha channel and shadow blur come through pixel-perfect (no forced
+// blur=0 like WebM needs), and there's no codec/container guessing at all.
+// The ZIP itself is written by hand (STORE method, no compression -- PNGs
+// are already compressed) so this stays a true single-file, no-dependency
+// app, in the same spirit as the hand-rolled GIF89a encoder above.
+const CRC_TABLE = (function(){
+  const table = new Uint32Array(256);
+  for(let n=0;n<256;n++){
+    let c = n;
+    for(let k=0;k<8;k++){
+      c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    }
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+function crc32(bytes){
+  let c = 0xFFFFFFFF;
+  for(let i=0;i<bytes.length;i++){
+    c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  }
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function buildZip(entries){
+  function u16(n){ return [n & 0xFF, (n>>8) & 0xFF]; }
+  function u32(n){ return [n & 0xFF, (n>>8) & 0xFF, (n>>16) & 0xFF, (n>>>24) & 0xFF]; }
+
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+
+  for(const entry of entries){
+    const nameBytes = new TextEncoder().encode(entry.name);
+    const data = entry.data;
+    const crc = crc32(data);
+
+    const local = [];
+    local.push(...u32(0x04034b50));
+    local.push(...u16(20));            // version needed to extract
+    local.push(...u16(0));             // general purpose flags
+    local.push(...u16(0));             // compression method: store
+    local.push(...u16(0));             // mod file time (unused)
+    local.push(...u16(0x21));          // mod file date (unused, valid value)
+    local.push(...u32(crc));
+    local.push(...u32(data.length));   // compressed size
+    local.push(...u32(data.length));   // uncompressed size
+    local.push(...u16(nameBytes.length));
+    local.push(...u16(0));             // extra field length
+    for(const b of nameBytes) local.push(b);
+    const localHeader = new Uint8Array(local);
+
+    const localOffset = offset;
+    localParts.push(localHeader, data);
+    offset += localHeader.length + data.length;
+
+    const central = [];
+    central.push(...u32(0x02014b50));
+    central.push(...u16(20));          // version made by
+    central.push(...u16(20));          // version needed to extract
+    central.push(...u16(0));           // flags
+    central.push(...u16(0));           // method
+    central.push(...u16(0));           // mod time
+    central.push(...u16(0x21));        // mod date
+    central.push(...u32(crc));
+    central.push(...u32(data.length));
+    central.push(...u32(data.length));
+    central.push(...u16(nameBytes.length));
+    central.push(...u16(0));           // extra length
+    central.push(...u16(0));           // comment length
+    central.push(...u16(0));           // disk number start
+    central.push(...u16(0));           // internal attrs
+    central.push(...u32(0));           // external attrs
+    central.push(...u32(localOffset));
+    for(const b of nameBytes) central.push(b);
+    centralParts.push(new Uint8Array(central));
+  }
+
+  const centralStart = offset;
+  let centralSize = 0;
+  for(const c of centralParts){ centralSize += c.length; }
+
+  const end = [];
+  end.push(...u32(0x06054b50));
+  end.push(...u16(0), ...u16(0));
+  end.push(...u16(entries.length));
+  end.push(...u16(entries.length));
+  end.push(...u32(centralSize));
+  end.push(...u32(centralStart));
+  end.push(...u16(0));
+  const endRecord = new Uint8Array(end);
+
+  const total = offset + centralSize + endRecord.length;
+  const out = new Uint8Array(total);
+  let p = 0;
+  for(const part of localParts){ out.set(part, p); p += part.length; }
+  for(const part of centralParts){ out.set(part, p); p += part.length; }
+  out.set(endRecord, p);
+  return out;
+}
+
+async function exportPngSequence(){
+  if(!userImg || !paperImg){ alert(t('needBoth')); return; }
+
+  const useFolder = typeof window.showDirectoryPicker === 'function';
+  let dirHandle = null;
+
+  if(useFolder){
+    alert(t('pngSeqFolderNote'));
+    try{
+      dirHandle = await window.showDirectoryPicker();
+    } catch(err){
+      // AbortError = user closed the picker without choosing a folder;
+      // just quietly stop rather than falling through to a ZIP they didn't ask for.
+      return;
+    }
+  } else {
+    alert(t('pngSeqZipNote'));
+  }
+
+  const p = getParams();
+  const progressEl = document.getElementById('exportProgress');
+  progressEl.style.display = 'block';
+  progressEl.max = p.frames; progressEl.value = 0;
+  document.getElementById('exportDownloadLink').style.display = 'none';
+  setStatus('rendering', true);
+  setStatusDetail('(0/' + p.frames + ')');
+
+  const digits = String(p.frames).length < 3 ? 3 : String(p.frames).length;
+  const entries = []; // only used for the ZIP fallback path
+
+  // Full shadow blur is kept here -- unlike WebM, a plain PNG alpha channel
+  // has no trouble with soft/semi-transparent edges, so there's no need to
+  // force shadowBlur to 0 for this format.
+  const motionSeed = makeMotionSeed();
+  for(let i=0;i<p.frames;i++){
+    const m = motionAt(motionSeed, i/p.frames, p);
+    if(i % 4 === 0) maskCache.key = null;
+    const frame = composite(p.jaggedness, p.expansion, m.paperOx, m.paperOy, m.fgOx, m.fgOy, m.angle, p.shadowSize, p.shadowBlur, m.artOx, m.artOy);
+
+    const blob = await new Promise((resolve)=> frame.toBlob(resolve, 'image/png'));
+    const name = 'torn_paper_' + String(i+1).padStart(digits, '0') + '.png';
+
+    if(dirHandle){
+      // Write straight to disk -- no ZIP, no unzip step, Resolve can import
+      // this folder as-is the moment the loop finishes.
+      const fileHandle = await dirHandle.getFileHandle(name, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+    } else {
+      const buf = new Uint8Array(await blob.arrayBuffer());
+      entries.push({ name, data: buf });
+    }
+
+    progressEl.value = i+1;
+    setStatusDetail('(' + (i+1) + '/' + p.frames + ')');
+    await new Promise(r=> setTimeout(r, 0));
+  }
+
+  if(dirHandle){
+    progressEl.style.display = 'none';
+    setStatus('ready');
+    alert(t('pngSeqFolderDone'));
+    return;
+  }
+
+  setStatusDetail('— ' + t('encodingZip'));
+  await new Promise(r=> setTimeout(r, 0));
+  const zipBytes = buildZip(entries);
+  const blob = new Blob([zipBytes], { type: 'application/zip' });
+  const filename = 'torn_paper_frames.zip';
+
+  const link = document.getElementById('exportDownloadLink');
+  if(link.dataset.url) URL.revokeObjectURL(link.dataset.url);
+  const url = URL.createObjectURL(blob);
+  link.href = url;
+  link.download = filename;
+  link.dataset.url = url;
+  link.textContent = t('videoReady');
+  link.style.display = 'block';
+
+  downloadBlob(blob, filename);
+
+  progressEl.style.display = 'none';
+  setStatus('ready');
+}
+
+// ---------------- export dropdown wiring ----------------
+(function(){
+  const toggle = document.getElementById('btnExportToggle');
+  const menu = document.getElementById('exportMenu');
+  toggle.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    menu.classList.toggle('open');
+  });
+  document.addEventListener('click', ()=> menu.classList.remove('open'));
+  menu.querySelectorAll('.dropdown-item').forEach((item)=>{
+    item.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      menu.classList.remove('open');
+      const format = item.dataset.format;
+      if(format === 'gif') exportGif();
+      else if(format === 'pngseq') exportPngSequence();
+      else exportVideo(format);
+    });
+  });
+})();
+
+applyLang();
+})();
+</script>
+</body>
+</html>
